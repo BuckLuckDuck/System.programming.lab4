@@ -1,11 +1,12 @@
-﻿#include <windows.h>
+﻿#pragma warning(disable : 4996)
+
+#include <windows.h>
 #include <windowsx.h>
 #include <d2d1.h>
 #include <list>
 #include <memory>
 #include "resource.h"
 #pragma comment(lib, "d2d1")
-#pragma warning(disable : 4996)
 #include "Main_Window.h"
 using namespace std;
 template <class T> void SafeRelease(T** ppT)
@@ -75,10 +76,10 @@ class MainWindow : public BaseWindow<MainWindow>
     ID2D1SolidColorBrush* pBrush;
     D2D1_ELLIPSE            ellipse;
     D2D1_POINT_2F           ptMouse;
-    HCURSOR     hCursor;
-    CHOOSECOLOR cc;
-    COLORREF acrCustClr[16];
-    DWORD rgbCurrent;
+    HCURSOR     main_cursor;
+    CHOOSECOLOR color_choose;
+    COLORREF all_colors[16];
+    DWORD color_now;
     list<shared_ptr<MyEllipse>>             ellipses;
     list<shared_ptr<MyEllipse>>::iterator   selection;
     enum Mode { DrawMode, SelectMode, DragMode } mode;
@@ -117,8 +118,8 @@ class MainWindow : public BaseWindow<MainWindow>
             cursor = IDC_SIZEALL;
             break;
         }
-        hCursor = LoadCursor(NULL, cursor);
-        SetCursor(hCursor);
+        main_cursor = LoadCursor(NULL, cursor);
+        SetCursor(main_cursor);
     }
     void InsertEllipse(float x, float y);
     void DeleteEllipse();
@@ -131,11 +132,11 @@ public:
     {
         ClearSelection();
         SetMode(DrawMode);
-        ZeroMemory(&cc, sizeof(cc));
-        cc.lStructSize = sizeof(cc);
-        cc.lpCustColors = (LPDWORD)acrCustClr;
-        cc.rgbResult = rgbCurrent;
-        cc.Flags = CC_FULLOPEN | CC_RGBINIT;
+        ZeroMemory(&color_choose, sizeof(color_choose));
+        color_choose.lStructSize = sizeof(color_choose);
+        color_choose.lpCustColors = (LPDWORD)all_colors;
+        color_choose.rgbResult = color_now;
+        color_choose.Flags = CC_FULLOPEN | CC_RGBINIT;
     }
     PCWSTR  ClassName() const { return L"Ellipses Window Class"; }
     LRESULT HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -150,7 +151,7 @@ void MainWindow::InsertEllipse(float x, float y)
     D2D1_POINT_2F pt = { x,y };
     pme->ellipse.point = ptMouse = pt;
     pme->ellipse.radiusX = pme->ellipse.radiusY = 1.0f;
-    pme->color = D2D1::ColorF(GetRValue(rgbCurrent) / 255.0f, GetGValue(rgbCurrent) / 255.0f, GetBValue(rgbCurrent) / 255.0f);
+    pme->color = D2D1::ColorF(GetRValue(color_now) / 255.0f, GetGValue(color_now) / 255.0f, GetBValue(color_now) / 255.0f);
     ellipses.push_front(pme);
     selection = ellipses.begin();
 }
@@ -300,7 +301,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
 {
     MainWindow win;
     HACCEL hAccel = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDR_EL_ACCEL));
-    if (!win.Create(L"System programming 4", WS_OVERLAPPEDWINDOW))
+    if (!win.Create(L"System programming Lab 4 - Drawning", WS_OVERLAPPEDWINDOW))
     {
         return 0;
     }
@@ -322,7 +323,7 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
     switch (uMsg)
     {
     case WM_CREATE:
-        cc.hwndOwner = m_hwnd;
+        color_choose.hwndOwner = m_hwnd;
         if (FAILED(D2D1CreateFactory(
             D2D1_FACTORY_TYPE_SINGLE_THREADED, &pFactory)))
         {
@@ -355,17 +356,12 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
         HMENU ellipses = GetSubMenu(GetMenu(m_hwnd), 1);
         switch (LOWORD(wParam))
         {
-        case ID_DRAW_MODE:
-            EnableMenuItem(ellipses, ID_DRAW_MODE, MF_GRAYED);
-            EnableMenuItem(ellipses, ID_SELECT_MODE, MF_ENABLED);
-            SetMode(DrawMode);
-            break;
-        case ID_SELECT_MODE:
+        case ID_MODE_SELECT:
             EnableMenuItem(ellipses, ID_SELECT_MODE, MF_GRAYED);
             EnableMenuItem(ellipses, ID_DRAW_MODE, MF_ENABLED);
             SetMode(SelectMode);
             break;
-        case ID_TOGGLE_MODE:
+        case ID_MODE_SWITCH:
             if (mode == DrawMode)
             {
                 EnableMenuItem(ellipses, ID_SELECT_MODE, MF_GRAYED);
@@ -379,6 +375,11 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
                 SetMode(DrawMode);
             }
             break;
+        case ID_MODE_DRAW:
+            EnableMenuItem(ellipses, ID_DRAW_MODE, MF_GRAYED);
+            EnableMenuItem(ellipses, ID_SELECT_MODE, MF_ENABLED);
+            SetMode(DrawMode);
+            break;
         case ID_DELETE:
             if (Selection())
             {
@@ -386,10 +387,10 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
                 InvalidateRect(m_hwnd, NULL, FALSE);
             }
             break;
-        case ID_COLOR:
-            if (ChooseColor(&cc) == TRUE)
+        case ID_CHOOSE_COLOR:
+            if (ChooseColor(&color_choose) == TRUE)
             {
-                rgbCurrent = cc.rgbResult;
+                color_now = color_choose.rgbResult;
             }
             break;
         }
@@ -398,7 +399,7 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
     case WM_SETCURSOR:
         if (LOWORD(lParam) == HTCLIENT)
         {
-            SetCursor(hCursor);
+            SetCursor(main_cursor);
             return TRUE;
         }
         return 0;
